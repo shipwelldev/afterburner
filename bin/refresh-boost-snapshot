@@ -1,0 +1,236 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Maintainer tool for the vendored Laravel Boost snapshot in resources/boost.
+ *
+ * Refresh: replace the snapshot with the `.ai` assets of a released Boost
+ * checkout and reapply Afterburner's adaptations (ADAPTATIONS.patch):
+ *
+ *     bin/refresh-boost-snapshot <boost-checkout> --tag=v2.10.4 [--commit=<sha>] [--resources=<dir>]
+ *
+ * The new snapshot is assembled in a temporary directory. If the adaptation
+ * patch no longer applies, nothing is replaced and the conflicting files are
+ * reported, so upstream changes can be reviewed and the patch updated.
+ *
+ * Record: after editing files in resources/boost, regenerate ADAPTATIONS.patch
+ * against the pristine release they came from:
+ *
+ *     bin/refresh-boost-snapshot <boost-checkout> --record-adaptations [--resources=<dir>]
+ *
+ * The separately curated copy in `<resources>/afterburner` is never read or
+ * written; port wanted changes to it by hand. Applications never run this:
+ * installation only reads the shipped files. Requires git and diff.
+ */
+declare(strict_types=1);
+
+const METADATA = ['LICENSE.md', 'PROVENANCE.json', 'ADAPTATIONS.patch'];
+
+function fail(string $message): never
+{
+    fwrite(STDERR, $message.PHP_EOL);
+    exit(1);
+}
+
+/**
+ * @return array<string, string> relative path => sha256
+ */
+function hashes(string $root, bool $withoutMetadata = false): array
+{
+    $found = [];
+
+    if (! is_dir($root)) {
+        return $found;
+    }
+
+    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
+
+    foreach ($iterator as $file) {
+        $relative = str_replace('\\', '/', substr($file->getPathname(), strlen($root) + 1));
+
+        if ($file->isFile() && ! ($withoutMetadata && in_array($relative, METADATA, true))) {
+            $found[$relative] = hash_file('sha256', $file->getPathname());
+        }
+    }
+
+    ksort($found, SORT_STRING);
+
+    return $found;
+}
+
+function removeTree(string $path): void
+{
+    if (is_dir($path) && ! is_link($path)) {
+        foreach (array_diff(scandir($path) ?: [], ['.', '..']) as $entry) {
+            removeTree($path.'/'.$entry);
+        }
+
+        rmdir($path);
+    } elseif (file_exists($path) || is_link($path)) {
+        unlink($path);
+    }
+}
+
+function copyTree(string $source, string $target, array $skip = []): void
+{
+    foreach (hashes($source) as $relative => $hash) {
+        if (in_array($relative, $skip, true)) {
+            continue;
+        }
+
+        @mkdir(dirname($target.'/'.$relative), 0755, true);
+        copy($source.'/'.$relative, $target.'/'.$relative) || fail("Unable to copy {$relative}.");
+    }
+}
+
+/**
+ * @param  array<int, string>  $command
+ */
+function run(array $command, string $directory): array
+{
+    $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $directory);
+    $output = stream_get_contents($pipes[1]).stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+
+    return [proc_close($process), $output];
+}
+
+function temporaryDirectory(): string
+{
+    $path = sys_get_temp_dir().'/afterburner-snapshot-'.bin2hex(random_bytes(6));
+    mkdir($path, 0755, true);
+
+    return $path;
+}
+
+/**
+ * @return array<int, string>
+ */
+function patchedFiles(string $patch): array
+{
+    preg_match_all('/^\+\+\+ b\/(\S+)/m', $patch, $matches);
+
+    $files = array_values(array_unique($matches[1]));
+    sort($files, SORT_STRING);
+
+    return $files;
+}
+
+$options = [];
+$positional = [];
+
+foreach (array_slice($argv, 1) as $argument) {
+    if (preg_match('/^--([a-z-]+)(?:=(.*))?$/', $argument, $matches) === 1) {
+        $options[$matches[1]] = $matches[2] ?? true;
+    } else {
+        $positional[] = $argument;
+    }
+}
+
+$checkout = $positional[0] ?? fail('Usage: bin/refresh-boost-snapshot <boost-checkout> (--tag=<release tag> [--commit=<sha>] | --record-adaptations) [--resources=<dir>]');
+$resources = rtrim((string) ($options['resources'] ?? dirname(__DIR__).'/resources'), '/');
+$source = rtrim($checkout, '/').'/.ai';
+$target = $resources.'/boost';
+$patchPath = $target.'/ADAPTATIONS.patch';
+
+if (! is_dir($source)) {
+    fail("{$source} does not exist; pass the root of a laravel/boost checkout.");
+}
+
+if (isset($options['record-adaptations'])) {
+    $work = temporaryDirectory();
+    copyTree($source, $work.'/a');
+    copyTree($target, $work.'/b', METADATA);
+
+    [$code, $diff] = run(['diff', '-ruN', 'a', 'b'], $work);
+    removeTree($work);
+
+    if ($code > 1) {
+        fail("diff failed:\n{$diff}");
+    }
+
+    // Drop file timestamps so the recorded patch only changes when the adaptations do.
+    $diff = (string) preg_replace('/^((?:---|\+\+\+) [ab]\/\S+)\t.*$/m', '$1', $diff);
+
+    file_put_contents($patchPath, $diff);
+
+    $provenance = json_decode((string) @file_get_contents($target.'/PROVENANCE.json'), true) ?: [];
+    $provenance['adaptations']['patch'] = 'ADAPTATIONS.patch';
+    $provenance['adaptations']['files'] = patchedFiles($diff);
+    file_put_contents($target.'/PROVENANCE.json', json_encode($provenance, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).PHP_EOL);
+
+    echo 'Recorded '.count($provenance['adaptations']['files']).' adapted file(s) in '.$patchPath.'.'.PHP_EOL;
+    exit(0);
+}
+
+$tag = $options['tag'] ?? fail('Pass --tag with the released Boost tag the checkout is at (for example --tag=v2.10.4).');
+$commit = $options['commit'] ?? trim((string) shell_exec('git -C '.escapeshellarg($checkout).' rev-parse HEAD 2>/dev/null'));
+
+if (! is_string($commit) || preg_match('/^[0-9a-f]{40}$/', $commit) !== 1) {
+    fail('Unable to determine the checkout commit; pass --commit=<sha>.');
+}
+
+if (! is_file($checkout.'/LICENSE.md')) {
+    fail("{$checkout}/LICENSE.md is missing; the snapshot must carry Boost's license.");
+}
+
+$patch = is_file($patchPath) ? (string) file_get_contents($patchPath) : '';
+$previousProvenance = json_decode((string) @file_get_contents($target.'/PROVENANCE.json'), true) ?: [];
+$previous = $previousProvenance['files'] ?? hashes($target, true);
+$incoming = hashes($source);
+
+// Assemble the new snapshot outside the repository, where `git apply` behaves like patch(1).
+$staging = temporaryDirectory();
+copyTree($source, $staging);
+
+if ($patch !== '') {
+    file_put_contents($staging.'/.adaptations.patch', $patch);
+    [$code, $output] = run(['git', 'apply', '--check', '-p1', '.adaptations.patch'], $staging);
+
+    if ($code !== 0) {
+        removeTree($staging);
+        fail("Afterburner's adaptations no longer apply to {$tag}; resources/boost was not changed.\n{$output}\nReview the upstream changes to these files, update resources/boost by hand, and run with --record-adaptations.");
+    }
+
+    run(['git', 'apply', '-p1', '.adaptations.patch'], $staging);
+    unlink($staging.'/.adaptations.patch');
+}
+
+copy($checkout.'/LICENSE.md', $staging.'/LICENSE.md');
+
+if ($patch !== '') {
+    file_put_contents($staging.'/ADAPTATIONS.patch', $patch);
+}
+
+file_put_contents($staging.'/PROVENANCE.json', json_encode(array_filter([
+    'package' => 'laravel/boost',
+    'tag' => $tag,
+    'commit' => $commit,
+    'source' => "https://github.com/laravel/boost/tree/{$tag}/.ai",
+    'license' => 'MIT (see LICENSE.md)',
+    'copied_at' => gmdate('Y-m-d'),
+    'files' => $incoming,
+    'adaptations' => $patch === '' ? null : [
+        'patch' => 'ADAPTATIONS.patch',
+        'summary' => $previousProvenance['adaptations']['summary'] ?? null,
+        'files' => patchedFiles($patch),
+    ],
+]), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).PHP_EOL);
+
+removeTree($target);
+copyTree($staging, $target);
+removeTree($staging);
+
+$added = array_diff_key($incoming, $previous);
+$removed = array_diff_key($previous, $incoming);
+$changed = array_keys(array_filter($incoming, fn (string $hash, string $file): bool => isset($previous[$file]) && $previous[$file] !== $hash, ARRAY_FILTER_USE_BOTH));
+
+echo "Snapshot replaced with laravel/boost {$tag} ({$commit})".($patch === '' ? '' : ' and Afterburner\'s adaptations reapplied').'.'.PHP_EOL;
+echo '  Added: '.count($added).', changed: '.count($changed).', removed: '.count($removed).PHP_EOL;
+
+foreach ([...array_map(fn ($f) => "+ {$f}", array_keys($added)), ...array_map(fn ($f) => "~ {$f}", $changed), ...array_map(fn ($f) => "- {$f}", array_keys($removed))] as $line) {
+    echo "    {$line}".PHP_EOL;
+}
+
+echo "The curated copy in {$resources}/afterburner was not modified. Review these changes and port wanted ones by hand.".PHP_EOL;

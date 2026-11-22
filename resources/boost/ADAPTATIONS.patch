@@ -1,0 +1,954 @@
+diff -ruN a/boost/core.blade.php b/boost/core.blade.php
+--- a/boost/core.blade.php
++++ b/boost/core.blade.php
+@@ -1,31 +1,10 @@
+ # Laravel Boost
+-@if($assist->hasMcpEnabled())
+-
+-## Tools
+-- Laravel Boost is an MCP server with tools designed specifically for this application. Prefer Boost tools over manual alternatives like shell commands or file reads.
+-- Use `database-query` to run read-only queries against the database instead of writing raw SQL in tinker.
+-- Use `database-schema` to inspect table structure before writing migrations or models.
+-- Use `get-absolute-url` to resolve the correct scheme, domain, and port for project URLs. Always use this before sharing a URL with the user.
+-@if (config('boost.browser_logs', false) !== false || config('boost.browser_logs_watcher', true) !== false)
+-- Use `browser-logs` to read browser logs, errors, and exceptions. Only recent logs are useful, ignore old entries.
+-@endif
+ 
+ ## Searching Documentation (IMPORTANT)
+-- Use `search-docs` before changes that depend on Laravel ecosystem APIs, behavior, configuration, or version-specific syntax. Skip it for copy-only edits and other changes where package documentation is irrelevant. Reuse sufficient results already in context instead of searching again.
+-- Pass a `packages` array to scope results when you know which packages are relevant.
+-- Use multiple broad, topic-based queries: `['rate limiting', 'routing rate limiting', 'routing']`. Expect the most relevant results first.
+-- Do not add package names to queries because package info is already shared. Use `test resource table`, not `filament 4 test resource table`.
+-### Search Syntax
+-1. Use words for auto-stemmed AND logic: `rate limit` matches both "rate" AND "limit".
+-2. Use `"quoted phrases"` for exact position matching: `"infinite scroll"` requires adjacent words in order.
+-3. Combine words and phrases for mixed queries: `middleware "rate limit"`.
+-4. Use multiple queries for OR logic: `queries=["authentication", "middleware"]`.
+-@endif
++- Use the `afterburner-documentation` skill before changes that depend on Laravel ecosystem APIs, behavior, configuration, or version-specific syntax. Skip it for copy-only edits and other changes where package documentation is irrelevant. Reuse sufficient results already in context instead of searching again.
+ 
+-@if(config('boost.rules.enabled', true))
+ ## Project Rules
+ - This project contains committed, area-grouped rules in `.ai/rules` when that directory exists, including path-scoped framework guidelines under `.ai/rules/boost`. Before you enter plan mode or create/edit any file, you MUST first: open @.ai/rules/index.md (it maps file globs to rule files), read every rule file whose globs cover the path(s) in scope, and run `grep -rin 'keyword' .ai/rules` to catch what a path match alone misses. Do not write code until you have read and are following every matching rule. If `.ai/rules` does not exist, continue without it.
+-@endif
+ 
+ ## Artisan
+ - Run Artisan commands directly via the command line (e.g., `{{ $assist->artisanCommand('route:list') }}`). Use `{{ $assist->artisanCommand('list') }}` to discover available commands and `{{ $assist->artisanCommand('[command] --help') }}` to check parameters.
+@@ -34,9 +13,5 @@
+ 
+ ## Tinker
+ - Execute PHP in app context for debugging and testing code. Do not create models without user approval, prefer tests with factories instead. Prefer existing Artisan commands over custom tinker code.
+-@if($assist->hasMcpEnabled() && config('boost.tinker_tool_enabled', false))
+-- Use the `tinker` MCP tool to execute PHP code instead of the CLI. It avoids shell escaping issues and runs the snippet in the Laravel application context.
+-@else
+ - Always use single quotes to prevent shell expansion: `{{ $assist->artisanCommand("tinker --execute 'Your::code();'") }}`
+   - Double quotes for PHP strings inside: `{{ $assist->artisanCommand("tinker --execute 'User::where(\"active\", true)->count();'") }}`
+-@endif
+diff -ruN a/boost/skill/infer-conventions/references/checklist.blade.php b/boost/skill/infer-conventions/references/checklist.blade.php
+--- a/boost/skill/infer-conventions/references/checklist.blade.php
++++ b/boost/skill/infer-conventions/references/checklist.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Detection checklist
+ 
+diff -ruN a/boost/skill/infer-conventions/SKILL.blade.php b/boost/skill/infer-conventions/SKILL.blade.php
+--- a/boost/skill/infer-conventions/SKILL.blade.php
++++ b/boost/skill/infer-conventions/SKILL.blade.php
+@@ -1,13 +1,13 @@
+ ---
+ name: infer-conventions
+-description: "Use this skill to analyze how a Laravel application is actually written and record its conventions as shared rules. Trigger when the user wants to detect, infer, document, or standardize project conventions or coding style, set up or grow `.ai/rules`, resolve mixed or conflicting patterns (e.g. \"are we using Form Requests or inline validation?\"), or onboard agents and teammates to \"how we do things here\". Covers: a systematic sweep of ~49 Laravel convention dimensions (validation, models, architecture, testing, frontend, database, API responses), open-ended house-pattern discovery, conflict reporting, and recording rules scoped to the right paths via the Boost `record-rule` MCP tool. Only run this skill when the user explicitly asks for it; never start a sweep as part of another task. Do not use for one-off code review, enforcing formatting a linter already handles, or editing `.ai/rules` files by hand."
++description: "Use this skill to analyze how a Laravel application is actually written and record its conventions as shared rules. Trigger when the user wants to detect, infer, document, or standardize project conventions or coding style, set up or grow `.ai/rules`, resolve mixed or conflicting patterns (e.g. \"are we using Form Requests or inline validation?\"), or onboard agents and teammates to \"how we do things here\". Covers: a systematic sweep of ~49 Laravel convention dimensions (validation, models, architecture, testing, frontend, database, API responses), open-ended house-pattern discovery, conflict reporting, and recording rules scoped to the right paths in `.ai/rules`. Only run this skill when the user explicitly asks for it; never start a sweep as part of another task. Do not use for one-off code review, enforcing formatting a linter already handles, or recording a single rule the user dictates (use the afterburner-project-rules skill for that)."
+ disable-model-invocation: true
+ license: MIT
+ metadata:
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Infer conventions
+ 
+@@ -21,7 +21,7 @@
+ - Architecture choices are the gold. Record presence and deliberate absence. The structural pattern the app commits to is the highest-signal convention and the one no tool can decide: Action classes and how they are invoked (`handle` / `execute` / `__invoke`), service objects, dedicated query objects exposing `builder()`, DTOs (spatie/laravel-data vs readonly classes), Form Request validation vs inline, an events and listeners spine vs direct calls, and domain or module folders. Also record a consistent non-pattern, such as "query Eloquent directly in controllers, no repository layer", so the next agent matches the app's altitude instead of over-engineering.
+ - Never duplicate `.ai/rules`. Read `.ai/rules/index.md` and the area files before the sweep. A dimension already covered there is marked done and skipped.
+ - Evidence or silence. A convention needs at least 3 consistent examples and no meaningful rival to become a candidate. Every Step 1 verdict applies this bar.
+-- The recorded rule states the convention, nothing else. One or two imperative lines: this project does X, so do X here. Keep detection evidence out. No counts, ratios, current usage, file lists, or example paths, because that is proof for the confirm step, not part of the rule. One short syntax fragment at most, and point to `search-docs` for API details.
++- The recorded rule states the convention, nothing else. One or two imperative lines: this project does X, so do X here. Keep detection evidence out. No counts, ratios, current usage, file lists, or example paths, because that is proof for the confirm step, not part of the rule. One short syntax fragment at most, and point to the `afterburner-documentation` skill for API details.
+ 
+ ## Process
+ 
+@@ -71,7 +71,7 @@
+ 
+ ### Step 4: Record
+ 
+-Make one `record-rule` call for each glob an approved convention applies to. Choose the most specific globs that cover the cited evidence from the mapping table below. If a convention spans models and migrations, record it under both domains so agents discover it from either path. The `note` is the bare convention: strip every trace of detection (see the ground rule). If `record-rule` is unavailable (rules disabled), report the full rule text so the user can enable `BOOST_RULES_ENABLED` or add it by hand.
++Record each approved convention under every glob it applies to by following the recording steps in the `afterburner-project-rules` skill. Choose the most specific globs that cover the cited evidence from the mapping table below. If a convention spans models and migrations, record it under both domains so agents discover it from either path. The `note` is the bare convention: strip every trace of detection (see the ground rule). When every approved item is written, run `{{ $assist->artisanCommand('afterburner:index-rules') }}` and resolve anything it reports.
+ 
+ Record this:
+ 
+@@ -81,7 +81,7 @@
+ 
+ > Accessors/mutators use the legacy magic-method style; the `Attribute`-class style is not used anywhere (13 legacy, 0 Attribute-class), e.g. `app/Models/Post.php`. Match the legacy style in existing models.
+ 
+-Done when: every approved item has a successful tool response, and any failure is reported with its rule text.
++Done when: every approved item is in its rule file, the index command succeeds, and any item you could not write is reported with its full rule text.
+ 
+ ### Step 5: Summarize
+ 
+@@ -100,11 +100,11 @@
+ - Migrations and database: `database/migrations/**`.
+ - Truly app-wide (rare, e.g. auth retrieval): `app/**`.
+ 
+-`record-rule` takes one glob. When a convention spans two domains (e.g. UUID keys touch models and migrations), call it once per domain with the same title and note. Mentioning another path in the note does not make the rule discoverable there.
++Each rule file is scoped by its `paths` frontmatter. When a convention spans two domains (e.g. UUID keys touch models and migrations), record it once per domain with the same title and note. Mentioning another path in the note does not make the rule discoverable there.
+ 
+ ## Edge cases
+ 
+-- Rules disabled or `record-rule` missing: detection is read-only, so Steps 0 to 3 still run, and recording falls back to the manual path in Step 4.
++- Rule files you cannot write (for example a read-only checkout): detection is read-only, so Steps 0 to 3 still run; report the full rule text of each approved item so the user can add it.
+ - Tiny or fresh app: most dimensions land on no-signal. Say so ("not enough code to infer conventions yet") and record nothing.
+ - Huge app: each dimension is a bounded grep plus a handful of file reads. Sample representative files, do not read everything.
+ - Re-runs: reading `.ai/rules` in Step 0 makes re-runs incremental, so only new or undecided dimensions surface.
+diff -ruN a/fluxui-free/skill/fluxui-development/SKILL.blade.php b/fluxui-free/skill/fluxui-development/SKILL.blade.php
+--- a/fluxui-free/skill/fluxui-development/SKILL.blade.php
++++ b/fluxui-free/skill/fluxui-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Flux UI development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Flux UI patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Flux UI patterns and documentation.
+ 
+ ## Basic usage
+ 
+@@ -75,5 +75,5 @@
+ 
+ - Trying to use Pro-only components in the free edition
+ - Not checking whether a Flux component exists before building a custom one
+-- Forgetting to use the `search-docs` tool for component-specific documentation
++- Forgetting to use the `afterburner-documentation` skill for component-specific documentation
+ - Not following the project's existing Flux patterns
+diff -ruN a/fluxui-pro/skill/fluxui-development/SKILL.blade.php b/fluxui-pro/skill/fluxui-development/SKILL.blade.php
+--- a/fluxui-pro/skill/fluxui-development/SKILL.blade.php
++++ b/fluxui-pro/skill/fluxui-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Flux UI development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Flux UI patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Flux UI patterns and documentation.
+ 
+ ## Basic usage
+ 
+@@ -78,5 +78,5 @@
+ ## Common pitfalls
+ 
+ - Not checking whether a Flux component exists before building a custom one
+-- Forgetting to use the `search-docs` tool for component-specific documentation
++- Forgetting to use the `afterburner-documentation` skill for component-specific documentation
+ - Not following the project's existing Flux patterns
+diff -ruN a/folio/skill/folio-routing/SKILL.blade.php b/folio/skill/folio-routing/SKILL.blade.php
+--- a/folio/skill/folio-routing/SKILL.blade.php
++++ b/folio/skill/folio-routing/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Folio routing
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Folio patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Folio patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/foundation.blade.php b/foundation.blade.php
+--- a/foundation.blade.php
++++ b/foundation.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Laravel Boost Guidelines
+ 
+@@ -10,8 +10,8 @@
+ - PHP packages: run `{{ $assist->composerCommand('show --direct') }}` to list direct dependencies with versions, or `{{ $assist->composerCommand('show <vendor/package>') }}` for a single package.
+ - JS packages: check `package.json` for the installed versions.
+ 
+-@if (! empty(config('boost.purpose')))
+-Application purpose: {!! config('boost.purpose') !!}
++@if (filled($assist->config->purpose))
++Application purpose: {!! $assist->config->purpose !!}
+ 
+ @endif
+ 
+diff -ruN a/herd/core.blade.php b/herd/core.blade.php
+--- a/herd/core.blade.php
++++ b/herd/core.blade.php
+@@ -1,4 +1,4 @@
+ # Laravel Herd
+ 
+-- The application is served by Laravel Herd at `https?://[kebab-case-project-dir].test`. Use the `get-absolute-url` tool to generate valid URLs. Never run commands to serve the site. It is always available.
++- The application is served by Laravel Herd at `https?://[kebab-case-project-dir].test`. Use the `afterburner-application-inspection` skill to generate valid URLs. Never run commands to serve the site. It is always available.
+ - Use the `herd` CLI to manage services, PHP versions, and sites (e.g. `herd sites`, `herd services:start <service>`, `herd php:list`). Run `herd list` to discover all available commands.
+diff -ruN a/inertia-laravel/core.blade.php b/inertia-laravel/core.blade.php
+--- a/inertia-laravel/core.blade.php
++++ b/inertia-laravel/core.blade.php
+@@ -3,12 +3,12 @@
+ 
+ - Inertia creates fully client-side rendered SPAs without modern SPA complexity, leveraging existing server-side patterns.
+ - Components live in `{{ $assist->inertia()->pagesDirectory() }}` (unless specified in `vite.config.js`). Use `Inertia::render()` for server-side routing instead of Blade views.
+-- ALWAYS use `search-docs` tool for version-specific Inertia documentation and updated code examples.
+-@if($assist->hasPackage(\Laravel\Boost\Support\PackageRegistry::INERTIA_REACT))
++- ALWAYS use the `afterburner-documentation` skill for version-specific Inertia documentation and updated code examples.
++@if($assist->hasPackage(\Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_REACT))
+ - IMPORTANT: Activate `inertia-react-development` when working with Inertia client-side patterns.
+-@elseif($assist->hasPackage(\Laravel\Boost\Support\PackageRegistry::INERTIA_VUE))
++@elseif($assist->hasPackage(\Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_VUE))
+ - IMPORTANT: Activate `inertia-vue-development` when working with Inertia Vue client-side patterns.
+-@elseif($assist->hasPackage(\Laravel\Boost\Support\PackageRegistry::INERTIA_SVELTE))
++@elseif($assist->hasPackage(\Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_SVELTE))
+ - IMPORTANT: Activate `inertia-svelte-development` when working with Inertia Svelte client-side patterns.
+ @endif
+ 
+diff -ruN a/inertia-react/1/skill/inertia-react-development/SKILL.blade.php b/inertia-react/1/skill/inertia-react-development/SKILL.blade.php
+--- a/inertia-react/1/skill/inertia-react-development/SKILL.blade.php
++++ b/inertia-react/1/skill/inertia-react-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Inertia React development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Inertia v1 React patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Inertia v1 React patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/inertia-react/2/skill/inertia-react-development/SKILL.blade.php b/inertia-react/2/skill/inertia-react-development/SKILL.blade.php
+--- a/inertia-react/2/skill/inertia-react-development/SKILL.blade.php
++++ b/inertia-react/2/skill/inertia-react-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Inertia React development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Inertia v2 React patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Inertia v2 React patterns and documentation.
+ 
+ ## Basic usage
+ 
+@@ -170,7 +170,7 @@
+ - `resetOnSuccess`: reset form data when the request succeeds
+ - `setDefaultsOnSuccess`: update default values on success
+ 
+-For details, run the `search-docs` tool with the query `form component resetting`.
++For details, look up `form component resetting` with the `afterburner-documentation` skill.
+ 
+ @boostsnippet("Form with Reset Props", "react")
+ import { Form } from '@inertiajs/react'
+@@ -197,7 +197,7 @@
+ Note: This version of Inertia does not support `resetOnError`, `resetOnSuccess`, or `setDefaultsOnSuccess` on the `<Form>` component. Using these props causes errors. To use these props, upgrade to Inertia v2.2.0+.
+ @endif
+ 
+-For more programmatic control, you can also build forms with the `useForm` hook. For guidance, run the `search-docs` tool with the query `useForm helper`.
++For more programmatic control, you can also build forms with the `useForm` hook. For guidance, look up the `useForm` helper with the `afterburner-documentation` skill.
+ 
+ @endif
+ 
+diff -ruN a/inertia-svelte/1/skill/inertia-svelte-development/SKILL.blade.php b/inertia-svelte/1/skill/inertia-svelte-development/SKILL.blade.php
+--- a/inertia-svelte/1/skill/inertia-svelte-development/SKILL.blade.php
++++ b/inertia-svelte/1/skill/inertia-svelte-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Inertia Svelte development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Inertia v1 Svelte patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Inertia v1 Svelte patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/inertia-svelte/2/skill/inertia-svelte-development/SKILL.blade.php b/inertia-svelte/2/skill/inertia-svelte-development/SKILL.blade.php
+--- a/inertia-svelte/2/skill/inertia-svelte-development/SKILL.blade.php
++++ b/inertia-svelte/2/skill/inertia-svelte-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Inertia Svelte development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Inertia v2 Svelte patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Inertia v2 Svelte patterns and documentation.
+ 
+ ## Basic usage
+ 
+@@ -138,7 +138,7 @@
+ - `resetOnSuccess`: reset form data when the request succeeds
+ - `setDefaultsOnSuccess`: update default values on success
+ 
+-For details, run the `search-docs` tool with the query `form component resetting`.
++For details, look up `form component resetting` with the `afterburner-documentation` skill.
+ 
+ @boostsnippet("Form With Reset Props", "svelte")
+ <script>
+@@ -168,7 +168,7 @@
+ Note: This version of Inertia does not support `resetOnError`, `resetOnSuccess`, or `setDefaultsOnSuccess` on the `<Form>` component. Using these props causes errors. To use these props, upgrade to Inertia v2.2.0+.
+ @endif
+ 
+-For more programmatic control, you can also build forms with the `useForm` hook. For guidance, run the `search-docs` tool with the query `useForm helper`.
++For more programmatic control, you can also build forms with the `useForm` hook. For guidance, look up the `useForm` helper with the `afterburner-documentation` skill.
+ 
+ @endif
+ 
+diff -ruN a/inertia-vue/1/skill/inertia-vue-development/SKILL.blade.php b/inertia-vue/1/skill/inertia-vue-development/SKILL.blade.php
+--- a/inertia-vue/1/skill/inertia-vue-development/SKILL.blade.php
++++ b/inertia-vue/1/skill/inertia-vue-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Inertia Vue development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Inertia v1 Vue patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Inertia v1 Vue patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/inertia-vue/2/skill/inertia-vue-development/SKILL.blade.php b/inertia-vue/2/skill/inertia-vue-development/SKILL.blade.php
+--- a/inertia-vue/2/skill/inertia-vue-development/SKILL.blade.php
++++ b/inertia-vue/2/skill/inertia-vue-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Inertia Vue development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Inertia v2 Vue patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Inertia v2 Vue patterns and documentation.
+ 
+ ## Basic usage
+ 
+@@ -206,7 +206,7 @@
+ - `resetOnSuccess`: reset form data when the request succeeds
+ - `setDefaultsOnSuccess`: update default values on success
+ 
+-For details, run the `search-docs` tool with the query `form component resetting`.
++For details, look up `form component resetting` with the `afterburner-documentation` skill.
+ 
+ @verbatim
+ @boostsnippet("Form with Reset Props", "vue")
+@@ -236,7 +236,7 @@
+ Note: This version of Inertia does not support `resetOnError`, `resetOnSuccess`, or `setDefaultsOnSuccess` on the `<Form>` component. Using these props causes errors. To use these props, upgrade to Inertia v2.2.0+.
+ @endif
+ 
+-For more programmatic control, you can also build forms with the `useForm` composable. For guidance, run the `search-docs` tool with the query `useForm helper`.
++For more programmatic control, you can also build forms with the `useForm` composable. For guidance, look up the `useForm` helper with the `afterburner-documentation` skill.
+ 
+ @endif
+ 
+diff -ruN a/laravel/11/core.blade.php b/laravel/11/core.blade.php
+--- a/laravel/11/core.blade.php
++++ b/laravel/11/core.blade.php
+@@ -1,10 +1,8 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Laravel 11
+-@if($assist->hasMcpEnabled())
+-- CRITICAL: ALWAYS use `search-docs` tool for version-specific Laravel documentation and updated code examples.
+-@endif
++- CRITICAL: ALWAYS use the `afterburner-documentation` skill for version-specific Laravel documentation and updated code examples.
+ @if (file_exists(app_path('Http/Kernel.php')))
+ - This project upgraded from Laravel 10 without migrating to the new streamlined Laravel 11 file structure.
+ - This is perfectly fine and recommended by Laravel. Follow the existing structure from Laravel 10. We do not need to migrate to the Laravel 11 structure unless the user explicitly requests it.
+@@ -34,7 +32,7 @@
+ @endscoped
+ 
+ ## New Artisan Commands
+-- List Artisan commands using Boost's MCP tool, if available. New commands available in Laravel 11:
++- List Artisan commands with `{{ $assist->artisanCommand('list') }}`. New commands available in Laravel 11:
+     - `{{ $assist->artisanCommand('make:enum') }}`
+     - `{{ $assist->artisanCommand('make:class') }}`
+     - `{{ $assist->artisanCommand('make:interface') }}`
+diff -ruN a/laravel/12/core.blade.php b/laravel/12/core.blade.php
+--- a/laravel/12/core.blade.php
++++ b/laravel/12/core.blade.php
+@@ -1,7 +1,5 @@
+ # Laravel 12
+-@if($assist->hasMcpEnabled())
+-- CRITICAL: ALWAYS use `search-docs` tool for version-specific Laravel documentation and updated code examples.
+-@endif
++- CRITICAL: ALWAYS use the `afterburner-documentation` skill for version-specific Laravel documentation and updated code examples.
+ @if (file_exists(app_path('Http/Kernel.php')))
+ - This project upgraded from Laravel 10 without migrating to the new streamlined Laravel file structure.
+ - This is perfectly fine and recommended by Laravel. Follow the existing structure from Laravel 10. We do not need to migrate to the new Laravel structure unless the user explicitly requests it.
+diff -ruN a/laravel/core.blade.php b/laravel/core.blade.php
+--- a/laravel/core.blade.php
++++ b/laravel/core.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Do Things the Laravel Way
+ 
+diff -ruN a/laravel/skill/laravel-best-practices/rules/config.blade.php b/laravel/skill/laravel-best-practices/rules/config.blade.php
+--- a/laravel/skill/laravel-best-practices/rules/config.blade.php
++++ b/laravel/skill/laravel-best-practices/rules/config.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Configuration best practices
+ 
+diff -ruN a/laravel/skill/laravel-best-practices/rules/events-notifications.blade.php b/laravel/skill/laravel-best-practices/rules/events-notifications.blade.php
+--- a/laravel/skill/laravel-best-practices/rules/events-notifications.blade.php
++++ b/laravel/skill/laravel-best-practices/rules/events-notifications.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Events and notifications best practices
+ 
+diff -ruN a/laravel/skill/laravel-best-practices/rules/mail.blade.php b/laravel/skill/laravel-best-practices/rules/mail.blade.php
+--- a/laravel/skill/laravel-best-practices/rules/mail.blade.php
++++ b/laravel/skill/laravel-best-practices/rules/mail.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Mail best practices
+ 
+diff -ruN a/laravel/skill/laravel-best-practices/rules/migrations.blade.php b/laravel/skill/laravel-best-practices/rules/migrations.blade.php
+--- a/laravel/skill/laravel-best-practices/rules/migrations.blade.php
++++ b/laravel/skill/laravel-best-practices/rules/migrations.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Migration best practices
+ 
+diff -ruN a/laravel/skill/laravel-best-practices/rules/scheduling.blade.php b/laravel/skill/laravel-best-practices/rules/scheduling.blade.php
+--- a/laravel/skill/laravel-best-practices/rules/scheduling.blade.php
++++ b/laravel/skill/laravel-best-practices/rules/scheduling.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Task scheduling best practices
+ 
+diff -ruN a/laravel/skill/laravel-best-practices/rules/security.blade.php b/laravel/skill/laravel-best-practices/rules/security.blade.php
+--- a/laravel/skill/laravel-best-practices/rules/security.blade.php
++++ b/laravel/skill/laravel-best-practices/rules/security.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Security best practices
+ 
+diff -ruN a/laravel/skill/laravel-best-practices/SKILL.md b/laravel/skill/laravel-best-practices/SKILL.md
+--- a/laravel/skill/laravel-best-practices/SKILL.md
++++ b/laravel/skill/laravel-best-practices/SKILL.md
+@@ -8,7 +8,7 @@
+ 
+ # Laravel best practices
+ 
+-Best practices for Laravel, organized as an index of rule files. Each rule file teaches what to do and why. For exact API syntax, verify with `search-docs`.
++Best practices for Laravel, organized as an index of rule files. Each rule file teaches what to do and why. For exact API syntax, verify with the `afterburner-documentation` skill.
+ 
+ ## Consistency first
+ 
+@@ -21,7 +21,7 @@
+ 1. Check the changed files, nearby code, project configuration, and relevant tests for established patterns. Deviate only for a correctness or security defect, and call the deviation out.
+ 2. Map every affected concern to the rule index below. Read each mapped rule file before editing. Skip unrelated rule files.
+ 3. Make the smallest coherent change. Keep the application's architecture and naming instead of introducing a second pattern for the same job.
+-4. Verify version-sensitive Laravel APIs for the installed version with `search-docs`, or inspect the installed framework when `search-docs` is unavailable.
++4. Verify version-sensitive Laravel APIs for the installed version with the `afterburner-documentation` skill, or inspect the installed framework when documentation is unavailable.
+ 5. Run the narrowest relevant tests first, then the project's formatting and static-analysis checks when the change warrants them.
+ 6. Re-read the diff against every mapped rule before finishing.
+ 
+diff -ruN a/laravel/skill/testing-best-practices/rules/assertions.blade.php b/laravel/skill/testing-best-practices/rules/assertions.blade.php
+--- a/laravel/skill/testing-best-practices/rules/assertions.blade.php
++++ b/laravel/skill/testing-best-practices/rules/assertions.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ $pest5 = $assist->hasPackage('pestphp/pest', '>=5.0');
+ $phpunit = $assist->project->php()->package('phpunit/phpunit');
+diff -ruN a/laravel/skill/testing-best-practices/rules/endpoint-tests.blade.php b/laravel/skill/testing-best-practices/rules/endpoint-tests.blade.php
+--- a/laravel/skill/testing-best-practices/rules/endpoint-tests.blade.php
++++ b/laravel/skill/testing-best-practices/rules/endpoint-tests.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ $browserPlugin = $pest && $assist->hasPackage('pestphp/pest-plugin-browser');
+ $dusk = $assist->hasPackage('laravel/dusk');
+diff -ruN a/laravel/skill/testing-best-practices/rules/finding-features.blade.php b/laravel/skill/testing-best-practices/rules/finding-features.blade.php
+--- a/laravel/skill/testing-best-practices/rules/finding-features.blade.php
++++ b/laravel/skill/testing-best-practices/rules/finding-features.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ $pest5 = $assist->hasPackage('pestphp/pest', '>=5.0');
+ @endphp
+@@ -8,7 +8,7 @@
+ @if($pest)
+ Pest adds features faster than this skill can list them. Find an existing feature before implementing the behavior by hand.
+ 
+-- Give `search-docs` the capability you need rather than the name of a function you remember. It returns features available in the installed version.
++- When you look up documentation with the `afterburner-documentation` skill, search for the capability you need rather than the name of a function you remember, and use the documentation for the installed version.
+ - Fetch `https://pestphp.com/llms.txt` for the complete feature list and additions in each release.
+ - If a search returns no results, tell the user that the installed version does not provide the feature. Do not write an API that you have not confirmed.
+ 
+@@ -32,7 +32,7 @@
+ @else
+ PHPUnit and Laravel provide features for most testing needs. Find an existing feature before implementing the behavior by hand.
+ 
+-- Give `search-docs` the capability you need rather than the name of a method you remember. It returns Laravel testing documentation for the installed version.
++- When you look up documentation with the `afterburner-documentation` skill, search for the capability you need rather than the name of a method you remember, and use the Laravel testing documentation for the installed version.
+ - Fetch `https://phpunit.de/documentation.html` for version-specific PHPUnit attributes, assertions, and command-line options.
+ - If a search returns no results, tell the user that the installed version does not provide the feature. Do not write an API that you have not confirmed.
+ 
+diff -ruN a/laravel/skill/testing-best-practices/rules/isolation.blade.php b/laravel/skill/testing-best-practices/rules/isolation.blade.php
+--- a/laravel/skill/testing-best-practices/rules/isolation.blade.php
++++ b/laravel/skill/testing-best-practices/rules/isolation.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ @endphp
+ # Fakes, mocks, and determinism
+diff -ruN a/laravel/skill/testing-best-practices/rules/naming.blade.php b/laravel/skill/testing-best-practices/rules/naming.blade.php
+--- a/laravel/skill/testing-best-practices/rules/naming.blade.php
++++ b/laravel/skill/testing-best-practices/rules/naming.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ @endphp
+ # Naming and structure
+diff -ruN a/laravel/skill/testing-best-practices/rules/performance.blade.php b/laravel/skill/testing-best-practices/rules/performance.blade.php
+--- a/laravel/skill/testing-best-practices/rules/performance.blade.php
++++ b/laravel/skill/testing-best-practices/rules/performance.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ $pest5 = $assist->hasPackage('pestphp/pest', '>=5.0');
+ $phpunit = $assist->project->php()->package('phpunit/phpunit');
+diff -ruN a/laravel/skill/testing-best-practices/rules/review.blade.php b/laravel/skill/testing-best-practices/rules/review.blade.php
+--- a/laravel/skill/testing-best-practices/rules/review.blade.php
++++ b/laravel/skill/testing-best-practices/rules/review.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ @endphp
+ # Reviewing tests
+diff -ruN a/laravel/skill/testing-best-practices/rules/security.blade.php b/laravel/skill/testing-best-practices/rules/security.blade.php
+--- a/laravel/skill/testing-best-practices/rules/security.blade.php
++++ b/laravel/skill/testing-best-practices/rules/security.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ @endphp
+ # Security tests
+diff -ruN a/laravel/skill/testing-best-practices/rules/test-data.blade.php b/laravel/skill/testing-best-practices/rules/test-data.blade.php
+--- a/laravel/skill/testing-best-practices/rules/test-data.blade.php
++++ b/laravel/skill/testing-best-practices/rules/test-data.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ @endphp
+ # Factories and test data
+diff -ruN a/laravel/skill/testing-best-practices/SKILL.blade.php b/laravel/skill/testing-best-practices/SKILL.blade.php
+--- a/laravel/skill/testing-best-practices/SKILL.blade.php
++++ b/laravel/skill/testing-best-practices/SKILL.blade.php
+@@ -1,19 +1,19 @@
+ ---
+ name: testing-best-practices
+-description: "Laravel test design and review. Use when selecting coverage, naming or structuring tests, choosing assertions or test data, isolating dependencies, testing HTTP or security boundaries, improving suite performance, or reviewing test value. Use framework guidance or search-docs for Pest and PHPUnit syntax."
++description: "Laravel test design and review. Use when selecting coverage, naming or structuring tests, choosing assertions or test data, isolating dependencies, testing HTTP or security boundaries, improving suite performance, or reviewing test value. Use framework guidance or the afterburner-documentation skill for Pest and PHPUnit syntax."
+ license: MIT
+ metadata:
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ $pest = $assist->hasPackage('pestphp/pest');
+ $phpunit = $assist->project->php()->package('phpunit/phpunit');
+ $phpunitDocs = 'the PHPUnit '.($phpunit ? $phpunit->version().' ' : '').'documentation at `https://phpunit.de/documentation.html`';
+ @endphp
+ # Testing best practices
+ 
+-This skill provides rules for designing Laravel tests. Each rule file explains what to do and why. Use `search-docs` for {{ $pest ? 'Laravel and Pest API syntax' : 'Laravel API syntax' }}.@if(! $pest) Fetch {{ $phpunitDocs }} for PHPUnit API syntax.@endif
++This skill provides rules for designing Laravel tests. Each rule file explains what to do and why. Use the `afterburner-documentation` skill for {{ $pest ? 'Laravel and Pest API syntax' : 'Laravel API syntax' }}.@if(! $pest) Fetch {{ $phpunitDocs }} for PHPUnit API syntax.@endif
+ 
+ This project uses {{ $pest ? 'Pest' : 'PHPUnit' }}. Follow the corresponding guidance in each rule.
+ 
+diff -ruN a/livewire/2/skill/livewire-development/SKILL.blade.php b/livewire/2/skill/livewire-development/SKILL.blade.php
+--- a/livewire/2/skill/livewire-development/SKILL.blade.php
++++ b/livewire/2/skill/livewire-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Livewire development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Livewire 2 patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Livewire 2 patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/livewire/3/skill/livewire-development/SKILL.blade.php b/livewire/3/skill/livewire-development/SKILL.blade.php
+--- a/livewire/3/skill/livewire-development/SKILL.blade.php
++++ b/livewire/3/skill/livewire-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Livewire development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Livewire 3 patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Livewire 3 patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/livewire/4/skill/livewire-development/SKILL.blade.php b/livewire/4/skill/livewire-development/SKILL.blade.php
+--- a/livewire/4/skill/livewire-development/SKILL.blade.php
++++ b/livewire/4/skill/livewire-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Livewire development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Livewire 4 patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Livewire 4 patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/mcp/skill/mcp-development/SKILL.blade.php b/mcp/skill/mcp-development/SKILL.blade.php
+--- a/mcp/skill/mcp-development/SKILL.blade.php
++++ b/mcp/skill/mcp-development/SKILL.blade.php
+@@ -6,18 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # MCP development
+ 
+ ## Documentation first
+ 
+-**CRITICAL**: Always use `search-docs` BEFORE writing MCP code. The documentation is version-specific and up to date.
+-
+-@boostsnippet("Search MCP Documentation", "text")
+-# Example searches
+-search-docs(['mcp tool output schema', 'mcp resource templates', 'mcp client oauth'])
+-@endboostsnippet
++**CRITICAL**: Always use the `afterburner-documentation` skill to read the Laravel MCP documentation for the installed version BEFORE writing MCP code, for example on `mcp tool output schema`, `mcp resource templates`, or `mcp client oauth`.
+ 
+ ## Quick reference
+ 
+@@ -125,7 +120,7 @@
+ 
+ ## MCP Apps
+ 
+-Generate apps with `make:mcp-app-resource`. Register the generated app resource in the server's `$resources` array, and render it with `Response::view(...)`. Link a tool to an app resource with `#[RendersApp(resource: AppResource::class)]`. Use `#[AppMeta]` for CSP, permissions, and bundled libraries. Use `Visibility::App` and `Visibility::Model` to control whether app tools are visible to the app, the model, or both. Before editing the app SDK integration, use `search-docs`.
++Generate apps with `make:mcp-app-resource`. Register the generated app resource in the server's `$resources` array, and render it with `Response::view(...)`. Link a tool to an app resource with `#[RendersApp(resource: AppResource::class)]`. Use `#[AppMeta]` for CSP, permissions, and bundled libraries. Use `Visibility::App` and `Visibility::Model` to control whether app tools are visible to the app, the model, or both. Before editing the app SDK integration, use the `afterburner-documentation` skill.
+ 
+ ## Testing MCP primitives
+ 
+@@ -194,11 +189,11 @@
+ $client->disconnect();
+ @endboostsnippet
+ 
+-For a local stdio server, use `Client::local('php', ['artisan', 'mcp:start'])`. To use named clients, register them with `Mcp::registerClient(...)` and resolve them with `Mcp::client(...)`. The client also provides `prompts()`, `getPrompt()`, `resources()`, and `readResource()`. The listing methods paginate automatically. Use `search-docs` for OAuth flows and result object APIs.
++For a local stdio server, use `Client::local('php', ['artisan', 'mcp:start'])`. To use named clients, register them with `Mcp::registerClient(...)` and resolve them with `Mcp::client(...)`. The client also provides `prompts()`, `getPrompt()`, `resources()`, and `readResource()`. The listing methods paginate automatically. Use the `afterburner-documentation` skill for OAuth flows and result object APIs.
+ 
+ ## Available features
+ 
+-The following features exist. **Use `search-docs` for implementation details**:
++The following features exist. **Use the `afterburner-documentation` skill for implementation details**:
+ 
+ - **Tools**: `schema()`, `outputSchema()`, validation, and annotations (`#[IsReadOnly]`, `#[IsDestructive]`, `#[IsIdempotent]`, `#[IsOpenWorld]`)
+ - **Resources**: URI templates (`HasUriTemplate`), resource links, blobs, audience, priority, and last-modified annotations
+@@ -221,7 +216,7 @@
+ 
+ ## Common pitfalls
+ 
+-- **Not using `search-docs` before implementation**
++- **Not reading the documentation before implementation**
+ - Wrong imports: `Laravel\Mcp\Server\Request` (wrong) vs `Laravel\Mcp\Request` (correct)
+ - Forgetting to register primitives on the server or the server in `routes/ai.php`
+ - Using legacy `$description`, `$uri`, or `$mimeType` properties instead of attributes
+diff -ruN a/pennant/skill/pennant-development/SKILL.md b/pennant/skill/pennant-development/SKILL.md
+--- a/pennant/skill/pennant-development/SKILL.md
++++ b/pennant/skill/pennant-development/SKILL.md
+@@ -9,7 +9,7 @@
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Pennant patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Pennant patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/pest/core.blade.php b/pest/core.blade.php
+--- a/pest/core.blade.php
++++ b/pest/core.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ @scoped(['tests/**'])
+ # Pest
+diff -ruN a/php/core.blade.php b/php/core.blade.php
+--- a/php/core.blade.php
++++ b/php/core.blade.php
+@@ -1,7 +1,7 @@
+ # PHP
+ 
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ - Always use curly braces for control structures, even for single-line bodies.
+ - Use PHP 8 constructor property promotion: `public function __construct(public GitHub $github) { }`. Do not leave empty zero-parameter `__construct()` methods unless the constructor is private.
+diff -ruN a/phpunit/core.blade.php b/phpunit/core.blade.php
+--- a/phpunit/core.blade.php
++++ b/phpunit/core.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ @scoped(['tests/**'])
+ # PHPUnit
+diff -ruN a/pint/core.blade.php b/pint/core.blade.php
+--- a/pint/core.blade.php
++++ b/pint/core.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Laravel Pint Code Formatter
+ 
+diff -ruN a/sail/core.blade.php b/sail/core.blade.php
+--- a/sail/core.blade.php
++++ b/sail/core.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Laravel Sail
+ 
+diff -ruN a/tailwindcss/3/skill/tailwindcss-development/SKILL.md b/tailwindcss/3/skill/tailwindcss-development/SKILL.md
+--- a/tailwindcss/3/skill/tailwindcss-development/SKILL.md
++++ b/tailwindcss/3/skill/tailwindcss-development/SKILL.md
+@@ -9,7 +9,7 @@
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Tailwind CSS v3 patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Tailwind CSS v3 patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/tailwindcss/4/skill/tailwindcss-development/SKILL.md b/tailwindcss/4/skill/tailwindcss-development/SKILL.md
+--- a/tailwindcss/4/skill/tailwindcss-development/SKILL.md
++++ b/tailwindcss/4/skill/tailwindcss-development/SKILL.md
+@@ -9,7 +9,7 @@
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Tailwind CSS v4 patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Tailwind CSS v4 patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/volt/core.blade.php b/volt/core.blade.php
+--- a/volt/core.blade.php
++++ b/volt/core.blade.php
+@@ -3,6 +3,6 @@
+ 
+ - Single-file Livewire components: PHP logic and Blade templates in one file.
+ - Always check existing Volt components to determine functional vs class-based style.
+-- IMPORTANT: Always use `search-docs` tool for version-specific Volt documentation and updated code examples.
++- IMPORTANT: Always use the `afterburner-documentation` skill for version-specific Volt documentation and updated code examples.
+ - IMPORTANT: Activate `volt-development` every time you're working with a Volt or single-file component-related task.
+ @endscoped
+diff -ruN a/volt/skill/volt-development/SKILL.blade.php b/volt/skill/volt-development/SKILL.blade.php
+--- a/volt/skill/volt-development/SKILL.blade.php
++++ b/volt/skill/volt-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Volt development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Volt patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Volt patterns and documentation.
+ 
+ ## Basic usage
+ 
+diff -ruN a/wayfinder/core.blade.php b/wayfinder/core.blade.php
+--- a/wayfinder/core.blade.php
++++ b/wayfinder/core.blade.php
+@@ -1,5 +1,5 @@
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ @scoped(['resources/js/**'])
+ # Laravel Wayfinder
+diff -ruN a/wayfinder/skill/wayfinder-development/SKILL.blade.php b/wayfinder/skill/wayfinder-development/SKILL.blade.php
+--- a/wayfinder/skill/wayfinder-development/SKILL.blade.php
++++ b/wayfinder/skill/wayfinder-development/SKILL.blade.php
+@@ -6,13 +6,13 @@
+   author: laravel
+ ---
+ @php
+-/** @var \Laravel\Boost\Install\GuidelineAssist $assist */
++/** @var \Shipwell\Afterburner\Rendering\GuidelineAssist $assist */
+ @endphp
+ # Wayfinder development
+ 
+ ## Documentation
+ 
+-Use `search-docs` for detailed Wayfinder patterns and documentation.
++Use the `afterburner-documentation` skill for detailed Wayfinder patterns and documentation.
+ 
+ ## Quick reference
+ 
+@@ -62,22 +62,22 @@
+ show(1, { query: { page: 1 } }) // { url: "/posts/1?page=1", method: "get" }
+ @endboostsnippet
+ 
+-@if($assist->project->php()->uses(\Laravel\Boost\Support\PackageRegistry::INERTIA_LARAVEL) || $assist->project->js()->uses([\Laravel\Boost\Support\PackageRegistry::INERTIA_REACT, \Laravel\Boost\Support\PackageRegistry::INERTIA_VUE, \Laravel\Boost\Support\PackageRegistry::INERTIA_SVELTE]))
++@if($assist->project->php()->uses(\Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_LARAVEL) || $assist->project->js()->uses([\Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_REACT, \Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_VUE, \Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_SVELTE]))
+ ## Wayfinder + Inertia
+ 
+ @if($assist->inertia()->hasFormComponent())
+ Use Wayfinder with the `<Form>` component:
+-@if($assist->project->js()->uses(\Laravel\Boost\Support\PackageRegistry::INERTIA_REACT))
++@if($assist->project->js()->uses(\Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_REACT))
+ @boostsnippet("Wayfinder Form (React)", "typescript")
+ <Form {...store.form()}><input name="title" /></Form>
+ @endboostsnippet
+ @endif
+-@if($assist->project->js()->uses(\Laravel\Boost\Support\PackageRegistry::INERTIA_VUE))
++@if($assist->project->js()->uses(\Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_VUE))
+ @boostsnippet("Wayfinder Form (Vue)", "vue")
+ <Form v-bind="store.form()"><input name="title" /></Form>
+ @endboostsnippet
+ @endif
+-@if($assist->project->js()->uses(\Laravel\Boost\Support\PackageRegistry::INERTIA_SVELTE))
++@if($assist->project->js()->uses(\Shipwell\Afterburner\Discovery\PackageRegistry::INERTIA_SVELTE))
+ @boostsnippet("Wayfinder Form (Svelte)", "svelte")
+ <Form {...store.form()}><input name="title" /></Form>
+ @endboostsnippet

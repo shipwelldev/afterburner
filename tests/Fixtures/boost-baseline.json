@@ -1,0 +1,14 @@
+{
+    "package": "laravel/boost",
+    "tag": "v2.10.4",
+    "commit": "9cd5e7d81300b5dee4c8b1619ec4b36f4a6367fd",
+    "committed_at": "2026-10-30T00:01:16+05:30",
+    "source": "https://github.com/laravel/boost/tree/v2.10.4",
+    "license": "MIT",
+    "inventory": {
+        "package": "laravel/roster",
+        "tag": "v1.0.0",
+        "commit": "89e518bd88ae98ff50f6082f6b517c8d8e8245fa"
+    },
+    "recorded_at": "2026-11-21"
+}
