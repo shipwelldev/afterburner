@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+/.github            export-ignore
+/bin                export-ignore
+/docs               export-ignore
+/tests              export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+/GLOSSARY.md        export-ignore
+/phpunit.xml.dist   export-ignore
+/pint.json          export-ignore
+/.ai                export-ignore

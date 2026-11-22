@@ -1,0 +1,71 @@
+{
+    "name": "shipwelldev/afterburner",
+    "description": "Publishes Laravel application guidelines, skills, and project rules for coding agents without an MCP server.",
+    "keywords": [
+        "laravel",
+        "ai",
+        "agents",
+        "guidelines",
+        "skills",
+        "boost"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "illuminate/console": "^13.40",
+        "illuminate/contracts": "^13.40",
+        "illuminate/database": "^13.40",
+        "illuminate/filesystem": "^13.40",
+        "illuminate/support": "^13.40",
+        "illuminate/view": "^13.40",
+        "laravel/prompts": "^0.3.10",
+        "laravel/roster": "^1.0",
+        "symfony/process": "^7.4|^8.0",
+        "symfony/yaml": "^7.4|^8.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.27",
+        "orchestra/testbench": "^11.3",
+        "pestphp/pest": "^5.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Shipwell\\Afterburner\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Shipwell\\Afterburner\\AfterburnerServiceProvider"
+            ]
+        }
+    },
+    "archive": {
+        "exclude": [
+            "/vendor",
+            "/composer.lock",
+            "/build",
+            "/.phpunit.cache",
+            "/.phpunit.result.cache"
+        ]
+    },
+    "scripts": {
+        "test": "pest",
+        "lint": "pint",
+        "test:lint": "pint --test"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
